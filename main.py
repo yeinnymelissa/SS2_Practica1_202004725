@@ -120,7 +120,7 @@ def extraer_informacion():
     print(f"Extrayendo información de {archivo}...")
 
     try:
-        
+
         if conn is None:
             conectar_bd()
 
@@ -147,19 +147,15 @@ def extraer_informacion():
         );
         """)
 
-        # Leer el archivo CSV y cargar los datos en la tabla temporal
         with open(archivo, mode='r', newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
 
-            # Insertar los datos en la tabla temporal
             for row in reader:
                 arrival_airport = row.get('Arrival Airport', '')
 
-                # Filtrar filas donde Arrival Airport es 0 o -
                 if arrival_airport in ['0', '-']:
                     continue
 
-                # Convertir la fecha usando varios formatos
                 def convertir_fecha(fecha_str):
                     formatos_fecha = ['%d-%m-%Y', '%m/%d/%Y', '%Y-%m-%d']
                     for formato in formatos_fecha:
@@ -169,7 +165,6 @@ def extraer_informacion():
                             continue
                     return None
 
-                # Obtener la fecha convertida
                 departure_date = convertir_fecha(row.get('Departure Date', ''))
                 values = (
                     row.get('Passenger ID', ''),
@@ -223,7 +218,6 @@ def cargar_informacion():
             VALUES (source.PASSENGER_ID, source.FIRST_NAME, source.LAST_NAME, source.GENDER, source.AGE, source.NATIONALITY);
         """)
 
-        # Cargar datos en la tabla de Aeropuertos (AIRPORT) utilizando MERGE
         cursor.execute("""
         MERGE INTO AIRPORT AS target
         USING (
@@ -237,7 +231,6 @@ def cargar_informacion():
             VALUES (source.NAME, source.COUNTRY_CODE, source.COUNTRY_NAME, source.AIRPORT_CONTINENT, source.CONTINENTS);
         """)
 
-        # Cargar datos en la tabla de Información de Vuelo (FLIGHT_INFO) utilizando MERGE
         cursor.execute("""
         MERGE INTO FLIGHT_INFO AS target
         USING (
@@ -254,7 +247,6 @@ def cargar_informacion():
             VALUES (source.PILOT_NAME, source.DEPARTURE_DATE, source.ARRIVAL_AIRPORT, source.STATUS);
         """)
 
-        # Cargar datos en la tabla de Vuelos (FLIGHT) utilizando MERGE
         cursor.execute("""
         MERGE INTO FLIGHT AS target
         USING (
@@ -288,10 +280,152 @@ def cargar_informacion():
     finally:
         cerrar_bd()
 
+def guardarConsulta(consulta, archivo, titulo):
+    conectar_bd()
+    cursor.execute(consulta)
+    resultados = cursor.fetchall()
+    
+    with open(archivo, "a") as file:
+        file.write(f"\n{titulo}\n")
+        file.write("-" * len(titulo) + "\n")
+        for fila in resultados:
+            file.write(" | ".join(map(str, fila)) + "\n")
+    
+    cerrar_bd()
+
 def realizar_consultas():
-    print("Realizando consultas...")
-    # Aquí iría el código para realizar las consultas y guardar los resultados en un archivo de texto
-    # ...
+    archivo = "resultados_consultas.txt"
+    
+    # Limpiar el archivo si ya existe
+    with open(archivo, "w") as file:
+        file.write("Resultados de Consultas\n")
+        file.write("=" * 30 + "\n")
+    
+    # Consulta 1: Contar Registros en Todas las Tablas
+    consulta1 = """
+    SELECT 'PASSENGER' AS Tabla, COUNT(*) AS Conteo FROM PASSENGER
+    UNION ALL
+    SELECT 'AIRPORT' AS Tabla, COUNT(*) AS Conteo FROM AIRPORT
+    UNION ALL
+    SELECT 'FLIGHT_INFO' AS Tabla, COUNT(*) AS Conteo FROM FLIGHT_INFO
+    UNION ALL
+    SELECT 'FLIGHT' AS Tabla, COUNT(*) AS Conteo FROM FLIGHT;
+    """
+    guardarConsulta(consulta1, archivo, "Conteo de Registros en Todas las Tablas")
+
+    # Consulta 2: Porcentaje de Pasajeros por Género
+    consulta2 = """
+    SELECT GENDER, 
+           (COUNT(*) * 100.0 / (SELECT COUNT(*) FROM PASSENGER)) AS Porcentaje
+    FROM PASSENGER
+    GROUP BY GENDER;
+    """
+    guardarConsulta(consulta2, archivo, "Porcentaje de Pasajeros por Género")
+
+    # Consulta 3: Nacionalidades con Su Mes y Año de Mayor Fecha de Salida
+    consulta3 = """
+    WITH FlightData AS (
+    SELECT 
+        p.NATIONALITY,
+        FORMAT(fi.DEPARTURE_DATE, 'yyyy-MM') AS [Month_Year]
+    FROM 
+        FLIGHT f
+    JOIN 
+        PASSENGER p ON f.PASSENGER_ID = p.PASSENGER_ID
+    JOIN 
+        FLIGHT_INFO fi ON f.FLIGHT_INFO_ID = fi.FLIGHT_INFO_ID
+)
+SELECT 
+    NATIONALITY AS [Nacionalidad],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-01' THEN 1 ELSE 0 END), 0) AS [2022-01],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-02' THEN 1 ELSE 0 END), 0) AS [2022-02],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-03' THEN 1 ELSE 0 END), 0) AS [2022-03],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-04' THEN 1 ELSE 0 END), 0) AS [2022-04],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-05' THEN 1 ELSE 0 END), 0) AS [2022-05],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-06' THEN 1 ELSE 0 END), 0) AS [2022-06],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-07' THEN 1 ELSE 0 END), 0) AS [2022-07],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-08' THEN 1 ELSE 0 END), 0) AS [2022-08],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-09' THEN 1 ELSE 0 END), 0) AS [2022-09],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-10' THEN 1 ELSE 0 END), 0) AS [2022-10],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-11' THEN 1 ELSE 0 END), 0) AS [2022-11],
+    ISNULL(SUM(CASE WHEN [Month_Year] = '2022-12' THEN 1 ELSE 0 END), 0) AS [2022-12]
+FROM 
+    FlightData
+GROUP BY 
+    NATIONALITY
+ORDER BY 
+    NATIONALITY;
+    """
+    guardarConsulta(consulta3, archivo, "Nacionalidades con Su Mes y Año de Mayor Fecha de Salida")
+
+    # Consulta 4: Contar Vuelos por País
+    consulta4 = """
+    SELECT a.COUNTRY_NAME, COUNT(*) AS TotalVuelos
+    FROM FLIGHT f
+    JOIN AIRPORT a ON f.AIRPORT_ID = a.AIRPORT_ID
+    GROUP BY a.COUNTRY_NAME;
+    """
+    guardarConsulta(consulta4, archivo, "Conteo de Vuelos por País")
+
+    # Consulta 5: Top 5 Aeropuertos con Mayor Número de Pasajeros
+    consulta5 = """
+    SELECT TOP 5 a.NAME AS Aeropuerto, COUNT(f.PASSENGER_ID) AS TotalPasajeros
+    FROM FLIGHT f
+    JOIN AIRPORT a ON f.AIRPORT_ID = a.AIRPORT_ID
+    GROUP BY a.NAME
+    ORDER BY TotalPasajeros DESC;
+    """
+    guardarConsulta(consulta5, archivo, "Top 5 Aeropuertos con Mayor Número de Pasajeros")
+
+    # Consulta 6: Conteo de Vuelos por Estado de Vuelo
+    consulta6 = """
+    SELECT STATUS, COUNT(*) AS TotalVuelos
+    FROM FLIGHT_INFO
+    GROUP BY STATUS;
+    """
+    guardarConsulta(consulta6, archivo, "Conteo de Vuelos por Estado de Vuelo")
+
+    # Consulta 7: Top 5 de los Países Más Visitados
+    consulta7 = """
+    SELECT TOP 5 a.COUNTRY_NAME AS País, COUNT(*) AS TotalVisitas
+    FROM FLIGHT f
+    JOIN AIRPORT a ON f.AIRPORT_ID = a.AIRPORT_ID
+    GROUP BY a.COUNTRY_NAME
+    ORDER BY TotalVisitas DESC;
+    """
+    guardarConsulta(consulta7, archivo, "Top 5 de los Países Más Visitados")
+
+    # Consulta 8: Top 5 de los Continentes Más Visitados
+    consulta8 = """
+    SELECT TOP 5 a.AIRPORT_CONTINENT AS Continente, COUNT(*) AS TotalVisitas
+    FROM FLIGHT f
+    JOIN AIRPORT a ON f.AIRPORT_ID = a.AIRPORT_ID
+    GROUP BY a.AIRPORT_CONTINENT
+    ORDER BY TotalVisitas DESC;
+    """
+    guardarConsulta(consulta8, archivo, "Top 5 de los Continentes Más Visitados")
+
+    # Consulta 9: Top 5 de Edades Divididas por Género que Más Viajan
+    consulta9 = """
+    SELECT TOP 5 p.GENDER AS Género, p.AGE AS Edad, COUNT(*) AS TotalPasajeros
+    FROM PASSENGER p
+    JOIN FLIGHT f ON p.PASSENGER_ID = f.PASSENGER_ID
+    GROUP BY p.GENDER, p.AGE
+    ORDER BY TotalPasajeros DESC;
+    """
+    guardarConsulta(consulta9, archivo, "Top 5 de Edades Divididas por Género que Más Viajan")
+
+    # Consulta 10: Conteo de Vuelos por Mes y Año
+    consulta10 = """
+    SELECT FORMAT(fi.DEPARTURE_DATE, 'MM-yyyy') AS MesAño, COUNT(*) AS TotalVuelos
+    FROM FLIGHT f
+    JOIN FLIGHT_INFO fi ON f.FLIGHT_INFO_ID = fi.FLIGHT_INFO_ID
+    GROUP BY FORMAT(fi.DEPARTURE_DATE, 'MM-yyyy');
+    """
+    guardarConsulta(consulta10, archivo, "Conteo de Vuelos por Mes y Año")
+
+    print("Todas las consultas se han ejecutado y los resultados están guardados en 'resultados_consultas.txt'.")
+
 
 def menu():
     while True:
